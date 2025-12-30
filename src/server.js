@@ -16,20 +16,28 @@ const server = http.createServer(app);
 // Initialize Socket.io
 initSocket(server);
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB and Start Server
+const startServer = async () => {
+    try {
+        await connectDB();
 
-// Start Background Jobs
-startBackgroundJobs();
+        // Start Background Jobs
+        startBackgroundJobs();
 
-// Start Server
-server.listen(PORT, () => {
-    logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-    logger.info(`🚀 SkillSwap Backend v3.0 - Production Ready`);
-    logger.info(`📡 API: http://localhost:${PORT}`);
-    logger.info(`🔌 WebSocket: ws://localhost:${PORT}`);
-    logger.info(`⚙️  Background jobs active`);
-});
+        server.listen(PORT, () => {
+            logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+            logger.info(`🚀 SkillSwap Backend v3.0 - Production Ready`);
+            logger.info(`📡 API: http://localhost:${PORT}`);
+            logger.info(`🔌 WebSocket: ws://localhost:${PORT}`);
+            logger.info(`⚙️  Background jobs active`);
+        });
+    } catch (error) {
+        logger.error(`Failed to connect to database: ${error.message}`);
+        process.exit(1);
+    }
+};
+
+startServer();
 
 // Graceful Shutdown
 process.on('SIGTERM', () => {
