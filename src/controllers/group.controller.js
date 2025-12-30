@@ -16,7 +16,11 @@ export const createGroup = async (req, res) => {
             members: [req.user._id]
         });
 
-        res.status(201).json({ success: true, group });
+        // Populate creator and members with user details
+        await group.populate('creator', 'firstName lastName avatar');
+        await group.populate('members', 'firstName lastName avatar');
+
+        res.status(201).json({ success: true, group: group.toJSON() });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -28,9 +32,10 @@ export const createGroup = async (req, res) => {
 export const getGroups = async (req, res) => {
     try {
         const groups = await Group.find({})
-            .populate('creator', 'firstName lastName avatar') // Populate creator details
-            .populate('members', 'firstName lastName avatar') // Populate members details if needed, or just count
-            .sort({ createdAt: -1 });
+            .populate('creator', 'firstName lastName avatar')
+            .populate('members', 'firstName lastName avatar')
+            .sort({ createdAt: -1 })
+            .lean(); // Return plain objects
 
         res.json(groups);
     } catch (error) {
@@ -45,7 +50,8 @@ export const getGroupById = async (req, res) => {
     try {
         const group = await Group.findById(req.params.id)
             .populate('creator', 'firstName lastName avatar')
-            .populate('members', 'firstName lastName avatar'); // Need members for UI display usually
+            .populate('members', 'firstName lastName avatar')
+            .lean(); // Return plain object
 
         if (!group) {
             return res.status(404).json({ message: 'Group not found' });
@@ -75,7 +81,11 @@ export const joinGroup = async (req, res) => {
         group.members.push(req.user._id);
         await group.save();
 
-        res.json({ success: true, message: 'Joined group successfully', group });
+        // Populate user details before sending response
+        await group.populate('creator', 'firstName lastName avatar');
+        await group.populate('members', 'firstName lastName avatar');
+
+        res.json({ success: true, message: 'Joined group successfully', group: group.toJSON() });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

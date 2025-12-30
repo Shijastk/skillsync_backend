@@ -15,5 +15,10 @@ const postSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Performance Indexes
+postSchema.index({ author: 1, createdAt: -1 }); // Get user's posts
+postSchema.index({ group: 1, createdAt: -1 }); // Get group posts
+postSchema.index({ createdAt: -1 }); // Global feed / trending
+
 const Post = mongoose.model('Post', postSchema);
 export default Post;

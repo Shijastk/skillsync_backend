@@ -7,6 +7,8 @@ export const createPost = async (req, res) => {
     try {
         const { content, groupId } = req.body;
         let image = req.body.image;
+        const Transaction = (await import('../models/transaction.model.js')).default;
+        const User = (await import('../models/user.model.js')).default;
 
         if (req.file) {
             image = req.file.path;
@@ -19,10 +21,23 @@ export const createPost = async (req, res) => {
             group: groupId
         });
 
-        // Populate author for immediate display
+        // GAMIFICATION: Award 5 coins for posting
+        // Limit to 5 paid posts per day to prevent spam? (For now, just flat award)
+        await User.findByIdAndUpdate(req.user._id, { $inc: { skillcoins: 5 } });
+
+        await Transaction.create({
+            user: req.user._id,
+            type: 'earn',
+            amount: 5,
+            description: 'Created a community post',
+            status: 'completed'
+        });
+
+        // Populate author and return clean JSON
         await post.populate('author', 'firstName lastName avatar');
 
-        res.status(201).json(post);
+        // Convert to plain object without Mongoose internals
+        res.status(201).json(post.toJSON());
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -43,7 +58,9 @@ export const getPosts = async (req, res) => {
         const posts = await Post.find(query)
             .populate('author', 'firstName lastName avatar')
             .populate('comments.user', 'firstName lastName avatar')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean(); // Return plain JavaScript objects
+
         res.json(posts);
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

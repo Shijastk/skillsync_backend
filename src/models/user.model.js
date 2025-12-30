@@ -3,9 +3,37 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
 const skillSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    level: { type: String, enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'], default: 'Beginner' }
-});
+    // Basic Info
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    category: { type: String, required: true },
+
+    // Experience Level (common for both skills and learning goals)
+    experienceLevel: {
+        type: String,
+        enum: ['beginner', 'intermediate', 'advanced', 'expert'],
+        required: true
+    },
+
+    // Skill-specific fields
+    proficiency: { type: String }, // For skills to teach
+    yearsExperience: { type: String }, // e.g., "1-3", "5-10"
+    tools: [{ type: String }], // Technologies/tools used
+
+    // Learning goal specific fields
+    targetDate: { type: Date }, // Target completion date
+    currentProgress: { type: Number, default: 0, min: 0, max: 100 }, // Progress percentage
+    resources: [{ type: String }], // Learning resources
+
+    // Common fields for matching algorithm
+    tags: [{ type: String }], // Additional tags for better matching
+    availability: { type: String }, // e.g., "weekday-evenings", "weekends"
+    preferredMethod: { type: String }, // e.g., "one-on-one", "video-calls"
+    notes: { type: String }, // Additional notes
+
+    // Metadata
+    createdAt: { type: Date, default: Date.now }
+}, { _id: true });
 
 const badgeSchema = new mongoose.Schema({
     type: { type: String, required: true },
@@ -126,6 +154,13 @@ userSchema.methods.spendSkillcoins = async function (amount) {
     await this.save();
     return this.skillcoins;
 };
+
+// PERFORMANCE INDEXES
+userSchema.index({ 'skillsToTeach.title': 1 });
+userSchema.index({ 'skillsToLearn.title': 1 });
+userSchema.index({ 'skillsToTeach.category': 1 });
+userSchema.index({ location: 1 });
+userSchema.index({ lastLoginAt: -1 }); // For activity checks
 
 const User = mongoose.model('User', userSchema);
 export default User;

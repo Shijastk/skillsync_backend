@@ -237,12 +237,98 @@ export const dailyGamification = cron.schedule('0 0 * * *', async () => {
     scheduled: false
 });
 
+// SESSION REMINDER JOB - Runs every 5 minutes
+export const sessionReminders = cron.schedule('*/5 * * * *', async () => {
+    try {
+        const now = new Date();
+        const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+        const fifteenMinLater = new Date(now.getTime() + 15 * 60 * 1000); // 15 min from now
+
+        // Find scheduled swaps starting in the next hour
+        const upcomingSwaps = await Swap.find({
+            status: 'scheduled',
+            scheduledDate: {
+                $gte: now,
+                $lte: oneHourLater
+            }
+        }).populate('requester recipient', 'firstName lastName email');
+
+        for (const swap of upcomingSwaps) {
+            try {
+                const timeUntilSession = swap.scheduledDate - now;
+                const minutesUntil = Math.floor(timeUntilSession / (60 * 1000));
+
+                // Send 1-hour reminder
+                if (minutesUntil >= 55 && minutesUntil <= 65) {
+                    await Promise.all([
+                        createNotification({
+                            userId: swap.requester._id,
+                            type: 'session_reminder',
+                            title: 'Session Starting Soon!',
+                            message: `Your swap with ${swap.recipient.firstName} starts in 1 hour`,
+                            data: { swapId: swap._id, minutesUntil: 60 },
+                            relatedEntity: { type: 'Swap', id: swap._id },
+                            actionUrl: `/schedule`
+                        }),
+                        createNotification({
+                            userId: swap.recipient._id,
+                            type: 'session_reminder',
+                            title: 'Session Starting Soon!',
+                            message: `Your swap with ${swap.requester.firstName} starts in 1 hour`,
+                            data: { swapId: swap._id, minutesUntil: 60 },
+                            relatedEntity: { type: 'Swap', id: swap._id },
+                            actionUrl: `/schedule`
+                        })
+                    ]);
+
+                    logger.info(`📧 Sent 1-hour reminder for swap ${swap._id}`);
+                }
+
+                // Send 15-minute reminder
+                if (minutesUntil >= 13 && minutesUntil <= 17) {
+                    await Promise.all([
+                        createNotification({
+                            userId: swap.requester._id,
+                            type: 'session_reminder',
+                            title: 'Session Starting Very Soon!',
+                            message: `Your swap with ${swap.recipient.firstName} starts in 15 minutes`,
+                            data: { swapId: swap._id, minutesUntil: 15 },
+                            relatedEntity: { type: 'Swap', id: swap._id },
+                            actionUrl: `/schedule`,
+                            priority: 'high'
+                        }),
+                        createNotification({
+                            userId: swap.recipient._id,
+                            type: 'session_reminder',
+                            title: 'Session Starting Very Soon!',
+                            message: `Your swap with ${swap.requester.firstName} starts in 15 minutes`,
+                            data: { swapId: swap._id, minutesUntil: 15 },
+                            relatedEntity: { type: 'Swap', id: swap._id },
+                            actionUrl: `/schedule`,
+                            priority: 'high'
+                        })
+                    ]);
+
+                    logger.info(`⏰ Sent 15-min reminder for swap ${swap._id}`);
+                }
+            } catch (error) {
+                logger.error(`Failed to send reminder for swap ${swap._id}:`, error);
+            }
+        }
+    } catch (error) {
+        logger.error('Session reminder job failed:', error);
+    }
+}, {
+    scheduled: false
+});
+
 // Start all jobs
 export const startBackgroundJobs = () => {
     logger.info('🚀 Starting background jobs...');
     swapAutoExpiry.start();
     emailProcessor.start();
     dailyGamification.start();
+    sessionReminders.start();
     logger.info('✅ All background jobs started');
 };
 
@@ -252,5 +338,6 @@ export const stopBackgroundJobs = () => {
     swapAutoExpiry.stop();
     emailProcessor.stop();
     dailyGamification.stop();
+    sessionReminders.stop();
     logger.info('✅ All background jobs stopped');
 };

@@ -34,8 +34,12 @@ const createRefreshToken = async (userId, ipAddress) => {
 // @desc    Auth user & get token
 // @route   POST /api/auth/login
 // @access  Public
+// @desc    Auth user & get token
+// @route   POST /api/auth/login
+// @access  Public
 export const loginUser = async (req, res) => {
     const { email, password } = req.body;
+    const Transaction = (await import('../models/transaction.model.js')).default;
 
     try {
         const user = await User.findOne({ email }).select('+password');
@@ -43,6 +47,43 @@ export const loginUser = async (req, res) => {
         if (user && (await user.matchPassword(password))) {
             const accessToken = generateAccessToken(user._id);
             const refreshToken = await createRefreshToken(user._id, req.ip);
+
+            // --- GAMIFICATION: Login Streak ---
+            const now = new Date();
+            const lastLogin = user.lastLoginAt ? new Date(user.lastLoginAt) : new Date(0);
+
+            // Normalize to midnight to check dates
+            const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const lastLoginMidnight = new Date(lastLogin.getFullYear(), lastLogin.getMonth(), lastLogin.getDate());
+
+            const diffTime = Math.abs(todayMidnight - lastLoginMidnight);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 1) {
+                // Consectutive day login
+                user.loginStreak = (user.loginStreak || 0) + 1;
+
+                // Weekly bonus
+                if (user.loginStreak % 7 === 0) {
+                    const bonus = 50;
+                    user.skillcoins = (user.skillcoins || 0) + bonus;
+                    await Transaction.create({
+                        user: user._id,
+                        type: 'bonus',
+                        amount: bonus,
+                        description: `${user.loginStreak} Day Login Streak!`,
+                        status: 'completed'
+                    });
+                }
+            } else if (diffDays > 1) {
+                // Streak broken
+                user.loginStreak = 1;
+            }
+            // else diffDays === 0 (same day login), do nothing
+
+            user.lastLoginAt = now;
+            await user.save();
+            // ---------------------------------
 
             // Make response compatible with frontend
             const userResponse = user.toObject();
@@ -75,7 +116,8 @@ export const loginUser = async (req, res) => {
 // @route   POST /api/auth/register
 // @access  Public
 export const registerUser = async (req, res) => {
-    const { firstName, lastName, email, password } = req.body;
+    const { firstName, lastName, email, password, referralCode } = req.body;
+    const Transaction = (await import('../models/transaction.model.js')).default;
 
     try {
         const userExists = await User.findOne({ email });
@@ -84,13 +126,48 @@ export const registerUser = async (req, res) => {
             return res.status(400).json({ success: false, message: 'User already exists' });
         }
 
+        // Handle Referral Logic
+        let referredBy = undefined;
+        let referrer = null;
+
+        if (referralCode) {
+            referrer = await User.findOne({ referralCode });
+            if (referrer) {
+                referredBy = referrer._id;
+                referrer.referralCount = (referrer.referralCount || 0) + 1;
+                // Award Referrer 100 coins
+                referrer.skillcoins = (referrer.skillcoins || 0) + 100;
+                await referrer.save();
+
+                await Transaction.create({
+                    user: referrer._id,
+                    type: 'referral',
+                    amount: 100,
+                    description: `Referral Bonus: ${firstName} joined!`,
+                    status: 'completed'
+                });
+            }
+        }
+
         const user = await User.create({
             firstName,
             lastName,
             email,
             password,
-            avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`
+            avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+            referredBy,
+            skillcoins: referrer ? 100 : 50 // Start with 100 if referred, else 50
         });
+
+        if (referrer) {
+            await Transaction.create({
+                user: user._id,
+                type: 'bonus',
+                amount: 50,
+                description: 'Welcome Bonus (Referral Link)',
+                status: 'completed'
+            });
+        }
 
         if (user) {
             const accessToken = generateAccessToken(user._id);

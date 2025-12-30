@@ -15,7 +15,7 @@ export const getWalletInfo = async (req, res) => {
 
         // Calculate stats
         const totalEarned = transactions
-            .filter(t => t.type === 'earn' || t.type === 'bonus' || t.type === 'referral')
+            .filter(t => t.type === 'earn' || t.type === 'bonus' || t.type === 'referral' || t.type === 'credit')
             .reduce((sum, t) => sum + t.amount, 0);
 
         const totalSpent = transactions
@@ -27,7 +27,7 @@ export const getWalletInfo = async (req, res) => {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const thisMonthEarnings = transactions
             .filter(t =>
-                (t.type === 'earn' || t.type === 'bonus' || t.type === 'referral') &&
+                (t.type === 'earn' || t.type === 'bonus' || t.type === 'referral' || t.type === 'credit') &&
                 new Date(t.createdAt) >= startOfMonth
             )
             .reduce((sum, t) => sum + t.amount, 0);
